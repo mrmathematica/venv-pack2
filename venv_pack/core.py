@@ -14,7 +14,6 @@ from fnmatch import fnmatch
 from .formats import archive
 from .progress import progressbar
 
-
 __all__ = ('VenvPackException', 'Env', 'File', 'pack')
 
 
@@ -39,6 +38,15 @@ SHEBANG_REGEX = (
     br'(.*)'
     # end whole_shebang group
     br')$')
+
+# when the shebang line is long
+LONG_SHEBANG_REGEX = (
+    br"^(#!/bin/sh[\n\r]*"
+    br"'''exec'(?:[ ]*)"
+    br"(/\\ |[^ \n\r\t]*)"
+    br"(.*)"
+    br"[\n\r]*' '''"
+    br")$")
 
 BIN_DIR = 'Scripts' if on_win else 'bin'
 
@@ -542,7 +550,7 @@ def rewrite_shebang(data, file, prefix):
             if data.startswith(launcher):
                 data = data[len(launcher):]
                 data, rewrite, target = _rewrite_shebang(data, file.target, prefix)
-                return launcher+data, rewrite, target
+                return launcher + data, rewrite, target
 
         # reverse engineering
         # https://setuptools.pypa.io/en/latest/deprecated/easy_install.html
@@ -573,7 +581,8 @@ def _rewrite_shebang(data, target, prefix):
         Whether the file was successfully fixed in the rewrite.
     target : str
     """
-    shebang_match = re.match(SHEBANG_REGEX, data, re.MULTILINE)
+    shebang_match = re.match(LONG_SHEBANG_REGEX, data, re.MULTILINE) or\
+                    re.match(SHEBANG_REGEX, data, re.MULTILINE)
     prefix_b = prefix.encode('utf-8')
 
     if shebang_match:
@@ -586,8 +595,7 @@ def _rewrite_shebang(data, target, prefix):
         if executable.startswith(prefix_b):
             # shebang points inside environment, rewrite
             executable_name = os.path.basename(executable)
-            new_shebang = (b'#!%s%s' if on_win else b'#!/usr/bin/env %s%s') %\
-                          (executable_name, options)
+            new_shebang = (b'#!%s' if on_win else b'#!/usr/bin/env %s') % executable_name
             data = data.replace(shebang, new_shebang)
 
         return data, True, target
@@ -647,7 +655,7 @@ class Packer(object):
                     return
             self.archive.add(file.source, file.target)
         elif (file.target.startswith(BIN_DIR) and not
-              (os.path.isdir(file.source) or os.path.islink(file.source))):
+        (os.path.isdir(file.source) or os.path.islink(file.source))):
             with open(file.source, 'rb') as fil:
                 data = fil.read()
             data, _, target = rewrite_shebang(data, file, self.prefix)
