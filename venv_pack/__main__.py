@@ -4,7 +4,6 @@ import argparse
 import sys
 import traceback
 
-from . import __version__
 from .core import pack, VenvPackException
 
 
@@ -90,9 +89,6 @@ def build_parser():
                         help="Do not report progress")
     parser.add_argument("--help", "-h", action='help',
                         help="Show this help message then exit")
-    parser.add_argument("--version",
-                        action='store_true',
-                        help="Show version then exit")
     return parser
 
 
@@ -107,11 +103,6 @@ def fail(msg):
 
 def main(args=None, pack=pack):
     args = PARSER.parse_args(args=args)
-
-    # Manually handle version printing to output to stdout in python < 3.4
-    if args.version:
-        print('venv-pack %s' % __version__)
-        sys.exit(0)
 
     try:
         pack(prefix=args.prefix,
