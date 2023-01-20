@@ -11,7 +11,7 @@ import zipfile
 from collections import namedtuple
 from fnmatch import fnmatch
 
-from .formats import archive
+from .formats import archive, untar
 from .progress import progressbar
 
 __all__ = ('VenvPackException', 'Env', 'File', 'pack')
@@ -194,7 +194,7 @@ class Env(object):
 
     def _output_and_format(self, output=None, format='infer'):
         if output is None and format == 'infer':
-            format = 'tar.gz'
+            format = 'folder'
         elif format == 'infer':
             if output.endswith('.zip'):
                 format = 'zip'
@@ -205,12 +205,15 @@ class Env(object):
             elif output.endswith('.tar'):
                 format = 'tar'
             else:
-                raise VenvPackException("Unknown file extension %r" % output)
-        elif format not in {'zip', 'tar.gz', 'tgz', 'tar.bz2', 'tbz2', 'tar'}:
+                format = 'folder'
+        elif format not in {'folder', 'zip', 'tar.gz', 'tgz', 'tar.bz2', 'tbz2', 'tar'}:
             raise VenvPackException("Unknown format %r" % format)
 
         if output is None:
-            output = os.extsep.join([self.name, format])
+            if format == 'folder':
+                output = self.name
+            else:
+                output = os.extsep.join([self.name, format])
 
         return output, format
 
@@ -291,7 +294,10 @@ class Env(object):
             raise
         else:
             # Writing succeeded, move archive to desired location
-            shutil.move(temp_path, output)
+            if format == 'folder':
+                untar(temp_path, output)
+            else:
+                shutil.move(temp_path, output)
 
         return output
 

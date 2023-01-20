@@ -10,6 +10,7 @@ _tar_mode = {'tar.gz': 'w:gz',
              'tgz': 'w:gz',
              'tar.bz2': 'w:bz2',
              'tbz2': 'w:bz2',
+             'folder': 'w',
              'tar': 'w'}
 
 
@@ -19,6 +20,11 @@ def archive(fileobj, format, compress_level=4, zip_symlinks=False, zip_64=True):
     else:
         return TarArchive(fileobj, _tar_mode[format], compress_level)
 
+
+def untar(tar, folder):
+    my_tar = tarfile.open(tar)
+    my_tar.extractall(folder)
+    my_tar.close()
 
 class TarArchive(object):
     def __init__(self, fileobj, mode, compress_level):
