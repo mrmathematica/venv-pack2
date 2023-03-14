@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='venv-pack',
-      version='0.3.0',
+      version='0.4.0',
       url='https://github.com/mrmathematica/venv-pack',
       project_urls={"Source Code": "https://github.com/mrmathematica/venv-pack"},
       maintainer='Chongkai Zhu',

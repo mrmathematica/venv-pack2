@@ -51,7 +51,7 @@ LONG_SHEBANG_REGEX = (
 BIN_DIR = 'Scripts' if on_win else 'bin'
 
 BAT_LAUNCHER = br'''@ECHO OFF
-%s %%~dp0\%s-script.py %%*'''
+%%~dp0\%s %%~dp0\%s-script.py %%*'''
 
 
 class AttrDict(dict):
@@ -194,7 +194,7 @@ class Env(object):
 
     def _output_and_format(self, output=None, format='infer'):
         if output is None and format == 'infer':
-            format = 'folder'
+            format = 'tar.gz'
         elif format == 'infer':
             if output.endswith('.zip'):
                 format = 'zip'
@@ -227,7 +227,7 @@ class Env(object):
         output : str, optional
             The path of the output file. Defaults to the environment name with a
             ``.tar.gz`` suffix (e.g. ``my_env.tar.gz``).
-        format : {'infer', 'zip', 'tar.gz', 'tgz', 'tar.bz2', 'tbz2', 'tar'}
+        format : {'infer', 'zip', 'tar.gz', 'tgz', 'tar.bz2', 'tbz2', 'tar', 'folder'}
             The archival format to use. By default this is inferred by the
             output file extension.
         python_prefix : str, optional
@@ -601,7 +601,7 @@ def _rewrite_shebang(data, target, prefix):
         if executable.startswith(prefix_b):
             # shebang points inside environment, rewrite
             executable_name = os.path.basename(executable)
-            new_shebang = (b'#!%s' if on_win else b'#!/usr/bin/env %s') % executable_name
+            new_shebang = (b'#!%s' if on_win else b'#!/bin/sh\n"exec" "`dirname $0`/%s" "$0" "$@"\n') % executable_name
             data = data.replace(shebang, new_shebang)
 
         return data, True, target
