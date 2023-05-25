@@ -600,8 +600,10 @@ def _rewrite_shebang(data, target, prefix):
 
         if executable.startswith(prefix_b):
             # shebang points inside environment, rewrite
-            executable_name = os.path.basename(executable)
-            new_shebang = (b'#!%s' if on_win else b'#!/bin/sh\n"exec" "`dirname $0`/%s" "$0" "$@"\n') % executable_name
+            new_shebang = (b'#!%s'
+                           if on_win else
+                           b'#!/bin/sh\n"exec" "`dirname $(realpath $0)`/%s" "$0" "$@"\n')\
+                          % os.path.basename(executable)
             data = data.replace(shebang, new_shebang)
 
         return data, True, target
