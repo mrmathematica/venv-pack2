@@ -296,6 +296,7 @@ class Env(object):
             # Writing succeeded, move archive to desired location
             if format == 'folder':
                 untar(temp_path, output)
+                os.remove(temp_path)
             else:
                 shutil.move(temp_path, output)
 
