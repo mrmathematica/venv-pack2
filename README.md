@@ -67,3 +67,10 @@ python -m zipfile -e venv.zip my_env\
 ```
 
 All features of venv should keep working from my_env folder. 
+
+## Caveats
+
+This tool is new, and has a few caveats.
+
+1. Python is not packaged with the environment, but rather symlinked in the environment. On Windows python venv does so in a pyvenv.cfg file. This is useful for deployment situations where Python is already installed on the machine, but the required library dependencies may not be.
+2. The os type where the environment was built must match the os type of the target. This means that environments built on windows can’t be relocated to linux.
