@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "venv-pack2"
+version = "0.7.0"
+maintainers = [
+  {name = "mrmathematica", email = "mrmathematica@yahoo.com"}
+]
+keywords = ["venv", "packaging", "portable"]
+classifiers = [
+  "Topic :: System :: Archiving :: Packaging",
+  "Topic :: System :: Software Distribution",
+  "Topic :: Software Development :: Build Tools",
+
+  "License :: OSI Approved :: BSD License",
+
+  "Programming Language :: Python :: 3",
+]
+description="Package virtual environments for redistribution"
+readme = "README.md"
+
+[project.urls]
+Repository = "https://github.com/mrmathematica/venv-pack2.git"
+
+[project.scripts]
+venv-pack = "venv_pack.__main__:main"
+
+[options]
+package_dir = "venv_pack"
