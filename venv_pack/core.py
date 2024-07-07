@@ -1,9 +1,9 @@
 from __future__ import absolute_import, print_function
 
+import filecmp
 import glob
 import os
 import re
-import setuptools
 import shutil
 import sys
 import tempfile
@@ -39,6 +39,18 @@ SHEBANG_REGEX = (
     # end whole_shebang group
     br')$')
 
+WIN_SHEBANG_REGEX = (
+    # pretty much the whole match string
+    br'(#!'
+    # allow spaces between #! and beginning of the executable path
+    br'(?:[ ]*)'
+    # the executable is the next text block without an escaped
+    # space or non-space whitespace character
+    br'(/\\ |[^ \n\r\t]*)'
+    # end whole_shebang group
+    br')$')
+
+
 # when the shebang line is long
 LONG_SHEBANG_REGEX = (
     br"^(#!/bin/sh[\n\r]*"
@@ -51,7 +63,7 @@ LONG_SHEBANG_REGEX = (
 BIN_DIR = 'Scripts' if on_win else 'bin'
 
 BAT_LAUNCHER = br'''@ECHO OFF
-%%~dp0\%s %%~dp0\%s-script.py %%*'''
+%%~dp0\%s %%~dp0\%s %%*'''
 
 
 class AttrDict(dict):
@@ -546,7 +558,8 @@ def load_environment(prefix):
     return context, files
 
 
-def rewrite_shebang(data, file, prefix):
+def rewrite_shebang(add_bytes, data, file, prefix):
+    prefix_b = prefix.encode('utf-8')
     if on_win and file.source.endswith('.exe'):
         # reverse engineering
         # pip\_vendor\distlib\pip\_vendor\distlib\scripts:ScriptMaker._write_script
@@ -556,29 +569,45 @@ def rewrite_shebang(data, file, prefix):
             launcher = _get_launcher(kind)
             if data.startswith(launcher):
                 data = data[len(launcher):]
-                data, rewrite, target = _rewrite_shebang(data, file.target, prefix)
+                data, rewrite, target = _rewrite_shebang(data, file.target, prefix_b)
                 return launcher + data, rewrite, target
+
+        # uv
+        if data.endswith(b"UVUV"):
+            shebang_match = re.search(WIN_SHEBANG_REGEX, data, re.MULTILINE)
+            if shebang_match:
+                _, executable = shebang_match.groups()
+                bat_content= BAT_LAUNCHER % (os.path.basename(executable),
+                                             os.path.basename(file.target).encode('utf-8') + b".uv")
+                add_bytes(file.source, bat_content, file.target[:-3] + "bat")
+                return data, True, file.target+".uv"
+            else:
+                return data, False, file.target
 
         # reverse engineering
         # https://setuptools.pypa.io/en/latest/deprecated/easy_install.html
-        import filecmp
-        setuptools_fn = os.path.dirname(setuptools.__file__)
-        for type in ('cli', 'gui'):
-            for platform in ('32', '64', 'arm64'):
-                launcher_fn = os.path.join(setuptools_fn, '%s-%s.exe' % (type, platform))
-                if os.path.exists(launcher_fn) and filecmp.cmp(file.source, launcher_fn):
-                    root, _ = os.path.splitext(os.path.basename(file.target))
-                    return (BAT_LAUNCHER % (b'python' if type == 'cli' else b'pythonw',
-                                            root.encode('utf-8')),
-                            True,
-                            file.target[:-3] + "bat")
+        try:
+            import setuptools
+        except:
+            setuptools = None
+        if setuptools:
+            setuptools_fn = os.path.dirname(setuptools.__file__)
+            for launcher_type in ('cli', 'gui'):
+                for platform in ('32', '64', 'arm64'):
+                    launcher_fn = os.path.join(setuptools_fn, '%s-%s.exe' % (launcher_type, platform))
+                    if os.path.exists(launcher_fn) and filecmp.cmp(file.source, launcher_fn):
+                        root, _ = os.path.splitext(os.path.basename(file.target))
+                        return (BAT_LAUNCHER % (b'python' if launcher_type == 'cli' else b'pythonw',
+                                                root.encode('utf-8')+b"-script.py"),
+                                True,
+                                file.target[:-3] + "bat")
 
-        return _rewrite_shebang(data, file.target, prefix)
+        return _rewrite_shebang(data, file.target, prefix_b)
     else:
-        return _rewrite_shebang(data, file.target, prefix)
+        return _rewrite_shebang(data, file.target, prefix_b)
 
 
-def _rewrite_shebang(data, target, prefix):
+def _rewrite_shebang(data, target, prefix_b):
     """Rewrite a shebang header to ``#!usr/bin/env program...``.
 
     Returns
@@ -590,7 +619,6 @@ def _rewrite_shebang(data, target, prefix):
     """
     shebang_match = re.match(LONG_SHEBANG_REGEX, data, re.MULTILINE) or\
                     re.match(SHEBANG_REGEX, data, re.MULTILINE)
-    prefix_b = prefix.encode('utf-8')
 
     if shebang_match:
         if data.count(prefix_b) > 1:  # pragma: nocover
@@ -667,7 +695,7 @@ class Packer(object):
         (os.path.isdir(file.source) or os.path.islink(file.source))):
             with open(file.source, 'rb') as fil:
                 data = fil.read()
-            data, _, target = rewrite_shebang(data, file, self.prefix)
+            data, _, target = rewrite_shebang(self.archive.add_bytes, data, file, self.prefix)
             self.archive.add_bytes(file.source, data, target)
         else:
             self.archive.add(file.source, file.target)
