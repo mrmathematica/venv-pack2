@@ -1,15 +1,20 @@
 from __future__ import absolute_import, print_function
 
+import filecmp
 import glob
 import os
 import re
-import setuptools
 import shutil
 import sys
 import tempfile
 import zipfile
 from collections import namedtuple
 from fnmatch import fnmatch
+
+try:
+    import setuptools
+except:
+    setuptools = None
 
 from .formats import archive, untar
 from .progress import progressbar
@@ -547,38 +552,6 @@ def load_environment(prefix):
 
 
 def rewrite_shebang(data, file, prefix):
-    if on_win and file.source.endswith('.exe'):
-        # reverse engineering
-        # pip\_vendor\distlib\pip\_vendor\distlib\scripts:ScriptMaker._write_script
-        from pip._vendor.distlib.scripts import ScriptMaker
-        _get_launcher = ScriptMaker('', '')._get_launcher
-        for kind in ('t', 'w'):
-            launcher = _get_launcher(kind)
-            if data.startswith(launcher):
-                data = data[len(launcher):]
-                data, rewrite, target = _rewrite_shebang(data, file.target, prefix)
-                return launcher + data, rewrite, target
-
-        # reverse engineering
-        # https://setuptools.pypa.io/en/latest/deprecated/easy_install.html
-        import filecmp
-        setuptools_fn = os.path.dirname(setuptools.__file__)
-        for type in ('cli', 'gui'):
-            for platform in ('32', '64', 'arm64'):
-                launcher_fn = os.path.join(setuptools_fn, '%s-%s.exe' % (type, platform))
-                if os.path.exists(launcher_fn) and filecmp.cmp(file.source, launcher_fn):
-                    root, _ = os.path.splitext(os.path.basename(file.target))
-                    return (BAT_LAUNCHER % (b'python' if type == 'cli' else b'pythonw',
-                                            root.encode('utf-8')),
-                            True,
-                            file.target[:-3] + "bat")
-
-        return _rewrite_shebang(data, file.target, prefix)
-    else:
-        return _rewrite_shebang(data, file.target, prefix)
-
-
-def _rewrite_shebang(data, target, prefix):
     """Rewrite a shebang header to ``#!usr/bin/env program...``.
 
     Returns
@@ -588,18 +561,62 @@ def _rewrite_shebang(data, target, prefix):
         Whether the file was successfully fixed in the rewrite.
     target : str
     """
+    prefix_b = prefix.encode('utf-8')
+    if on_win and file.source.endswith('.exe'):
+        # reverse engineering
+        # pip\_vendor\distlib\pip\_vendor\distlib\scripts:ScriptMaker._write_script
+        from pip._vendor.distlib.scripts import ScriptMaker
+        _get_launcher = ScriptMaker('', '')._get_launcher
+        for kind in ('t', 'w'):
+            launcher = _get_launcher(kind)
+            if data.startswith(launcher):
+                data = data[len(launcher):]
+                data, rewrite, target = _rewrite_shebang(data, file.target, prefix_b)
+                return launcher + data, rewrite, target
+
+        # uv
+        if data.endswith(b"UVUV"):
+            executable_length = int.from_bytes(data[-8:-4], byteorder='little')
+            executable = data[-8-executable_length:-8]
+            if executable.startswith(prefix_b):
+                executable = os.path.basename(executable)
+                return (data[:-8-executable_length]+executable+len(executable).to_bytes(4, byteorder='little')+b"UVUV",
+                        True,
+                        file.target)
+            else:
+                return data, False, file.target
+
+        # reverse engineering
+        # https://setuptools.pypa.io/en/latest/deprecated/easy_install.html
+        if setuptools:
+            setuptools_fn = os.path.dirname(setuptools.__file__)
+            for type in ('cli', 'gui'):
+                for platform in ('32', '64', 'arm64'):
+                    launcher_fn = os.path.join(setuptools_fn, '%s-%s.exe' % (type, platform))
+                    if os.path.exists(launcher_fn) and filecmp.cmp(file.source, launcher_fn):
+                        root, _ = os.path.splitext(os.path.basename(file.target))
+                        return (BAT_LAUNCHER % (b'python' if type == 'cli' else b'pythonw',
+                                                root.encode('utf-8')),
+                                True,
+                                file.target[:-3] + "bat")
+
+        return _rewrite_shebang(data, file.target, prefix_b)
+    else:
+        return _rewrite_shebang(data, file.target, prefix_b)
+
+
+def _rewrite_shebang(data, target, prefix):
     shebang_match = re.match(LONG_SHEBANG_REGEX, data, re.MULTILINE) or\
                     re.match(SHEBANG_REGEX, data, re.MULTILINE)
-    prefix_b = prefix.encode('utf-8')
 
     if shebang_match:
-        if data.count(prefix_b) > 1:  # pragma: nocover
+        if data.count(prefix) > 1:  # pragma: nocover
             # More than one occurrence of prefix, can't fully cleanup.
             return data, False, target
 
         shebang, executable, options = shebang_match.groups()
 
-        if executable.startswith(prefix_b):
+        if executable.startswith(prefix):
             # shebang points inside environment, rewrite
             new_shebang = (b'#!%s'
                            if on_win else
