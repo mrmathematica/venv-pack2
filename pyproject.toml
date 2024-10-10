@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "venv-pack2"
-version = "0.9.0"
+version = "0.9.1"
 maintainers = [
   {name = "mrmathematica", email = "mrmathematica@yahoo.com"}
 ]

@@ -620,7 +620,7 @@ def _rewrite_shebang(data, target, prefix):
             # shebang points inside environment, rewrite
             new_shebang = (b'#!%s'
                            if on_win else
-                           b'#!/bin/sh\n"exec" "`dirname $( /usr/bin/readlink -f $0 || readlink -f $0 )`/%s" "$0" "$@"\n')\
+                           b'#!/bin/sh\n"exec" "`dirname $(realpath -- $0)`/%s" "$0" "$@"\n')\
                           % os.path.basename(executable)
             data = data.replace(shebang, new_shebang)
 
